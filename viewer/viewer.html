@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Viewer</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: sans-serif;
+        background: #eee;
+      }
+
+      #toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding: 10px;
+        background: white;
+        border-bottom: 1px solid #ccc;
+        display: flex;
+        flex-wrap: wrap;
+        gap: normal 20px;
+      }
+
+      #info {
+        color: #555;
+      }
+
+      #zoom-container {
+        display: flex;
+        gap: 10px;
+      }
+
+      #zoom-text {
+        color: #555;
+      }
+
+      #container {
+        width: 100vw;
+        height: calc(100vh - 60px);
+        overflow: auto;
+        padding: 20px;
+      }
+
+      canvas {
+        display: block;
+        background: white;
+        image-rendering: crisp-edges;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar">
+      <input type="file" id="file-input" accept=".csv,text/csv" />
+      <div id="info">CSVファイルを選択してください。</div>
+      <div id="zoom-container">
+        <button id="zoom-out" type="button">- 縮小</button>
+        <button id="zoom-in" type="button">+ 拡大</button>
+        <div id="zoom-text">100 %</div>
+      </div>
+    </div>
+    <div id="container">
+      <canvas id="canvas"></canvas>
+    </div>
+    <script>
+      const fileInput = document.getElementById('file-input');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const info = document.getElementById('info');
+      const zoomText = document.getElementById('zoom-text');
+      let isFileDrawn = false;
+      fileInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+          return;
+        }
+        try {
+          const text = await file.text();
+          isFileDrawn = true;
+          drawCSV(text);
+        } catch (error) {
+          console.error(error);
+          info.textContent = 'CSVの読み込みに失敗しました。';
+        }
+      });
+
+      // 基礎倍率(1マスがcanvasの1pxに対応しているため、ベースとして拡大表示)
+      const BASE_ZOOM = 10;
+      // ズーム倍率(%)
+      let zoom = 100;
+
+      function updateZoom() {
+        canvas.style.width = `${(canvas.width * (isFileDrawn ? BASE_ZOOM : 1) * zoom) / 100}px`;
+        canvas.style.height = `${(canvas.height * (isFileDrawn ? BASE_ZOOM : 1) * zoom) / 100}px`;
+        zoomText.textContent = `${zoom} %`;
+      }
+
+      // 拡大
+      document.getElementById('zoom-in').addEventListener('click', () => {
+        zoom += 10;
+        updateZoom();
+      });
+      // 縮小
+      document.getElementById('zoom-out').addEventListener('click', () => {
+        zoom -= 10;
+        updateZoom();
+      });
+
+      function drawCSV(text) {
+        // 改行コードを統一
+        text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        // CSVを行に分割
+        const rows = text.trim().split('\n');
+        // 各行をカンマで分割
+        const data = rows.map((row) =>
+          row.split(',').map((value) => value.trim()),
+        );
+        const height = data.length;
+        const width = data[0].length;
+        // CanvasサイズをCSVに合わせる
+        canvas.width = width;
+        canvas.height = height;
+        // ImageDataを作成
+        const image = ctx.createImageData(width, height);
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const value = data[y][x];
+
+            // ImageDataではRGBAの4要素を使う
+            const i = (y * width + x) * 4;
+            // 0 = 白、1 = 黒
+            const color = value === '1' ? 0 : 255;
+            image.data[i] = color; // R
+            image.data[i + 1] = color; // G
+            image.data[i + 2] = color; // B
+            image.data[i + 3] = 255; // A
+          }
+        }
+        // Canvasへ一括転送
+        ctx.putImageData(image, 0, 0);
+
+        // CSVを読み込んだ直後にも現在のzoomを反映
+        updateZoom();
+
+        info.textContent = `${width} × ${height}`;
+      }
+    </script>
+  </body>
+</html>
